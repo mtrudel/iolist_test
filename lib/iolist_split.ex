@@ -6,36 +6,33 @@ defmodule IOListSplit do
   """
   def split(list, length), do: do_split([], list, length)
 
-  defp do_split(acc, list, length) do
-    case next_binary(list) do
-      {nil, _} ->
-        {:error, :length_exceeded}
+  # We don't need to grab any more of rest
+  defp do_split(head, rest, 0), do: {head, rest}
 
-      {head, rest} ->
-        if byte_size(head) < length do
-          # We still need more bytes
-          do_split([acc | head], rest, length - byte_size(head))
-        else
-          # We have enough bytes in head
-          <<head_head::binary-size(length), head_rest::binary>> = head
-          {[acc | head_head], [head_rest | rest]}
-        end
+  # All we have left is a binary, so split it if we can
+  defp do_split(head, rest, length) when is_binary(rest) do
+    case rest do
+      <<rest_head::binary-size(length), rest_rest::binary>> ->
+        {[head | rest_head], rest_rest}
+
+      _ ->
+        {:error, :length_exceeded}
     end
   end
 
-  @doc """
-  Returns the next binary element of the given iolist along with the remainder of the iolist
-  beyond it as a tuple. Returns `{nil, []}` if there is no other binary in the list
-  """
-  def next_binary(binary) when is_binary(binary), do: {binary, []}
-  def next_binary([]), do: {nil, []}
-  def next_binary([head]), do: next_binary(head)
+  # We have a non-zero length still to get, but nothing left in rest
+  defp do_split(_head, [], _length), do: {:error, :length_exceeded}
 
-  def next_binary([head | rest]) do
-    case next_binary(head) do
-      {nil, []} -> next_binary(rest)
-      {head, []} -> {head, rest}
-      {head, head_rest} -> {head, [head_rest | rest]}
+  defp do_split(head, [rest_head | rest_rest], length) do
+    rest_head_length = IO.iodata_length(rest_head)
+
+    if rest_head_length <= length do
+      # We require more bytes than are in rest_head, so claim it and try again with rest_rest
+      do_split([head | rest_head], rest_rest, length - rest_head_length)
+    else
+      # We know that we'll make up all that we need within rest_head, so split it
+      {rest_head_head, rest_head_rest} = split(rest_head, length)
+      {[head | rest_head_head], [rest_head_rest | rest_rest]}
     end
   end
 end
