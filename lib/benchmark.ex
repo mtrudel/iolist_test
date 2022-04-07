@@ -10,6 +10,9 @@ defmodule IOListTest.Benchmark do
         "iodata_split" => fn ->
           IO.puts(iodata_split(data))
         end,
+        "iodata_split_3" => fn ->
+          IO.puts(iodata_split_3(data))
+        end,
         "binary_concat" => fn ->
           IO.puts(binary_concat(data))
         end
@@ -27,6 +30,27 @@ defmodule IOListTest.Benchmark do
     data
     |> Stream.unfold(fn data ->
       case IOListSplit.split(data, chunk_size) do
+        {:error, _} ->
+          nil
+
+        {next, rest} ->
+          if IO.iodata_length(next) == chunk_size do
+            {next, rest}
+          else
+            nil
+          end
+      end
+    end)
+    |> Enum.reject(&is_nil/1)
+    |> Enum.count()
+  end
+
+  # Takes an input iolist and splits it into @chunk_size chunks, then appends
+  # them back to a list
+  def iodata_split_3(data, chunk_size \\ @chunk_size) do
+    data
+    |> Stream.unfold(fn data ->
+      case IOListSplit3.split(data, chunk_size) do
         {:error, _} ->
           nil
 
