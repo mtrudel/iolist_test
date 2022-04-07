@@ -1,29 +1,45 @@
-defmodule IOListTest do
-  @chunk_size 100
-  def test do
+defmodule IOListTest.Benchmark do
+  @chunk_size 5000
+
+  def run do
     data = build_data()
+    Process.sleep(10000)
 
     Benchee.run(
       %{
-        "iodata_split" => fn -> iodata_split(data) end,
-        "binary_concat" => fn -> binary_concat(data) end
+        "iodata_split" => fn ->
+          IO.puts(iodata_split(data))
+        end,
+        "binary_concat" => fn ->
+          IO.puts(binary_concat(data))
+        end
       },
       time: 10,
       memory_time: 2
     )
+
+    :ok
   end
 
   # Takes an input iolist and splits it into @chunk_size chunks, then appends
   # them back to a list
-  def iodata_split(data) do
+  def iodata_split(data, chunk_size \\ @chunk_size) do
     data
     |> Stream.unfold(fn data ->
-      case IOListSplit.split(data, @chunk_size) do
-        {:error, _} -> nil
-        {next, rest} -> {next, rest}
+      case IOListSplit.split(data, chunk_size) do
+        {:error, _} ->
+          nil
+
+        {next, rest} ->
+          if IO.iodata_length(next) == chunk_size do
+            {next, rest}
+          else
+            nil
+          end
       end
     end)
-    |> Enum.reduce([], fn element, acc -> [acc | element] end)
+    |> Enum.reject(&is_nil/1)
+    |> Enum.count()
   end
 
   # Takes an input iolist and splits it into @chunk_size binary chunks, then
@@ -39,11 +55,12 @@ defmodule IOListTest do
         nil
       end
     end)
-    |> Enum.reduce(<<>>, fn element, acc -> acc <> element end)
+    |> Enum.reject(&is_nil/1)
+    |> Enum.count()
   end
 
   # Builds approx 1GB of data as an iodata (2M avg 500 byte binaries)
-  defp build_data do
+  def build_data do
     Stream.repeatedly(fn -> String.duplicate("a", Enum.random(1..1000)) end)
     |> Enum.take(2_000_000)
   end
